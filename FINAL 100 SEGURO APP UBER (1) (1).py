@@ -1,12 +1,18 @@
 import streamlit as st
+import requests
 import json
-import os
 import datetime
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Control de Horarios Uber", layout="wide")
 
-archivo_datos = "datos.json"
+# ==============================================================================
+# ⚠️ PEGA AQUÍ LA URL DE TU BASE DE DATOS DE FIREBASE
+# ==============================================================================
+https://console.firebase.google.com/project/servicio-uber/database/servicio-uber-default-rtdb/data/~2F
+FIREBASE_URL = "PEGA_AQUI_TU_URL_DE_FIREBASE"
+if FIREBASE_URL.endswith("/"):
+    FIREBASE_URL = FIREBASE_URL[:-1]
 
 PERSONAS_DEFAULT = {
     "tochi": "Adrian de la cruz",
@@ -67,10 +73,8 @@ anio_actual = datetime.date.today().year
 semanas_mes, mapa_semanas = generar_calendario(anio_actual)
 
 def texto_a_numero(txt):
-    try:
-        return float(txt)
-    except Exception:
-        return 0.0
+    try: return float(txt)
+    except Exception: return 0.0
 
 def hora_a_numero(txt):
     txt = str(txt).strip().lower().replace(".", "")
@@ -78,10 +82,8 @@ def hora_a_numero(txt):
     es_pm, es_am = "pm" in txt, "am" in txt
     txt = txt.replace("pm", "").replace("am", "").strip()
     if not txt: return None
-    try:
-        h, m = map(int, txt.split(":")) if ":" in txt else (int(txt), 0)
-    except Exception:
-        return None
+    try: h, m = map(int, txt.split(":")) if ":" in txt else (int(txt), 0)
+    except Exception: return None
     if es_pm and h != 12: h += 12
     if es_am and h == 12: h = 0
     return h + m / 60.0
@@ -102,32 +104,40 @@ def obtener_horas_trabajadas(txt):
 def dinero(v):
     return f"${v:,.2f}"
 
-def cargar_datos():
+# --- FUNCIONES DE NUBE (FIREBASE) ---
+def cargar_datos_nube():
     base = {"personas": dict(PERSONAS_DEFAULT), "modelos": dict(MODELOS_DEFAULT), "registros": {}}
-    if os.path.exists(archivo_datos):
-        try:
-            with open(archivo_datos, "r", encoding="utf-8") as f:
-                cargado = json.load(f)
+    if "PEGA_AQUI" in FIREBASE_URL:
+        return base
+    try:
+        res = requests.get(f"{FIREBASE_URL}/datos.json")
+        if res.status_code == 200 and res.json() is not None:
+            cargado = res.json()
             base["personas"].update(cargado.get("personas", {}))
             base["modelos"].update(cargado.get("modelos", {}))
             base["registros"] = cargado.get("registros", {})
-        except Exception:
-            pass
+    except Exception as e:
+        st.error(f"Error al conectar con la nube: {e}")
     return base
 
-def guardar_datos():
-    with open(archivo_datos, "w", encoding="utf-8") as f:
-        json.dump(st.session_state.datos, f, ensure_ascii=False, indent=2)
+def guardar_datos_nube():
+    if "PEGA_AQUI" in FIREBASE_URL:
+        st.warning("Falta configurar la URL de Firebase en el código.")
+        return
+    try:
+        requests.put(f"{FIREBASE_URL}/datos.json", json=st.session_state.datos)
+    except Exception as e:
+        st.error(f"Error al guardar en la nube: {e}")
 
 if "datos" not in st.session_state:
-    st.session_state.datos = cargar_datos()
+    st.session_state.datos = cargar_datos_nube()
 
 datos = st.session_state.datos
 
 # --- INTERFAZ STREAMLIT ---
-st.title("🚗 Control de Horarios y Pagos Uber")
+st.title("☁️ Control de Horarios Uber (Nube Automática)")
 
-tab1, tab2, tab3, tab4 = st.tabs(["📋 Captura de Horarios", "💰 Depósitos y Deudas", "⚙️ Gestión (Choferes/Autos)", "💾 Respaldar / Cargar Datos"])
+tab1, tab2, tab3 = st.tabs(["📋 Captura de Horarios", "💰 Depósitos y Deudas", "⚙️ Gestión (Choferes/Autos)"])
 
 with tab1:
     c1, c2, c3 = st.columns(3)
@@ -188,7 +198,7 @@ with tab1:
     m2.metric("Total Extras ($)", dinero(dinero_extra))
     m3.metric("Saldo Pendiente a Pagar", dinero(total_a_pagar))
 
-    if st.button("💾 Guardar Registro de Semana", use_container_width=True):
+    if st.button("☁️ Guardar Registro en la Nube", use_container_width=True):
         info_sem = mapa_semanas.get(semana_sel, {})
         reg = {
             "horario": horarios_captura,
@@ -201,8 +211,8 @@ with tab1:
             "total_a_pagar": total_a_pagar,
         }
         datos["registros"].setdefault(persona_sel, {}).setdefault(mes_sel, {})[semana_sel] = reg
-        guardar_datos()
-        st.success("¡Registro guardado correctamente!")
+        guardar_datos_nube()
+        st.success("¡Registro guardado en la nube en tiempo real!")
 
 with tab2:
     st.subheader("Resumen de Depósitos")
@@ -240,8 +250,8 @@ with tab3:
     if st.button("Agregar Conductor"):
         if c_apodo and c_nombre:
             datos["personas"][c_apodo.lower()] = c_nombre
-            guardar_datos()
-            st.success(f"Conductor {c_nombre} agregado.")
+            guardar_datos_nube()
+            st.success(f"Conductor {c_nombre} agregado a la nube.")
             st.rerun()
 
     st.markdown("---")
@@ -252,32 +262,6 @@ with tab3:
     if st.button("Agregar Modelo"):
         if m_nombre:
             datos["modelos"][m_nombre] = {"base": m_base, "extra": m_extra}
-            guardar_datos()
-            st.success(f"Modelo {m_nombre} agregado.")
+            guardar_datos_nube()
+            st.success(f"Modelo {m_nombre} agregado a la nube.")
             st.rerun()
-
-with tab4:
-    st.subheader("💾 Guardar o Cargar Copia de Seguridad")
-    st.write("Debido a que el servidor de la nube se reinicia, descarga aquí tu archivo de respaldo para no perder información.")
-    
-    json_str = json.dumps(datos, ensure_ascii=False, indent=2)
-    st.download_button(
-        label="📥 Descargar copia de datos (datos.json)",
-        data=json_str,
-        file_name="datos.json",
-        mime="application/json",
-        use_container_width=True
-    )
-
-    st.markdown("---")
-    st.subheader("📤 Cargar Copia de Seguridad")
-    archivo_subido = st.file_uploader("Selecciona tu archivo datos.json descargado previamente", type=["json"])
-    if archivo_subido is not None:
-        try:
-            nuevos_datos = json.load(archivo_subido)
-            st.session_state.datos = nuevos_datos
-            guardar_datos()
-            st.success("¡Datos cargados y actualizados correctamente!")
-            st.rerun()
-        except Exception as e:
-            st.error("Error al leer el archivo JSON.")
