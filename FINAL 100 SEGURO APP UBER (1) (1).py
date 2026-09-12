@@ -9,8 +9,7 @@ st.set_page_config(page_title="Control de Horarios Uber", layout="wide")
 # ==============================================================================
 # ⚠️ PEGA AQUÍ LA URL DE TU BASE DE DATOS DE FIREBASE
 # ==============================================================================
-https://console.firebase.google.com/project/servicio-uber/database/servicio-uber-default-rtdb/data/~2F
-FIREBASE_URL = "PEGA_AQUI_TU_URL_DE_FIREBASE"
+FIREBASE_URL = "https://console.firebase.google.com/project/servicio-uber/database/servicio-uber-default-rtdb/data/~2F"
 if FIREBASE_URL.endswith("/"):
     FIREBASE_URL = FIREBASE_URL[:-1]
 
