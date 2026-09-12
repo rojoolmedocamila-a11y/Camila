@@ -127,8 +127,15 @@ def guardar_datos_nube():
         st.error(f"Error de conexión al guardar: {e}")
         return False
 
-# Cargar datos siempre al refrescar si no existen en memoria o si se presiona el botón
-if "datos" not in st.session_state or st.sidebar.button("🔄 Recargar datos de la Nube"):
+# BOTÓN DE RECARGA EN LA BARRA LATERAL (Limpia la memoria antes de cargar)
+if st.sidebar.button("🔄 Recargar datos de la Nube", use_container_width=True):
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.session_state.datos = cargar_datos_nube()
+    st.rerun()
+
+# CARGA INICIAL
+if "datos" not in st.session_state:
     st.session_state.datos = cargar_datos_nube()
 
 datos = st.session_state.datos
@@ -162,7 +169,6 @@ with tab1:
     horarios_captura = {}
     for i, d in enumerate(dias):
         val_prev = reg_existente.get("horario", {}).get(d, "")
-        # Se agrega la persona, mes y semana a la 'key' para forzar la actualización del cuadro de texto al cambiar
         key_horario = f"h_{persona_sel}_{mes_sel}_{semana_sel}_{d}"
         horarios_captura[d] = cols[i].text_input(d, value=val_prev, key=key_horario)
 
@@ -215,6 +221,10 @@ with tab1:
         datos["registros"].setdefault(persona_sel, {}).setdefault(mes_sel, {})[semana_sel] = reg
         if guardar_datos_nube():
             st.success("¡Registro guardado exitosamente en la nube!")
+            # Borramos la memoria local de la sesión para obligar a leer la nube limpia
+            for key in list(st.session_state.keys()):
+                if key != "datos":
+                    del st.session_state[key]
             st.rerun()
 
 with tab2:
