@@ -127,14 +127,11 @@ def guardar_datos_nube():
         st.error(f"Error de conexión al guardar: {e}")
         return False
 
-# BOTÓN DE RECARGA EN LA BARRA LATERAL (Limpia la memoria antes de cargar)
+# CARGA INICIAL Y RECARGA
 if st.sidebar.button("🔄 Recargar datos de la Nube", use_container_width=True):
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
     st.session_state.datos = cargar_datos_nube()
     st.rerun()
 
-# CARGA INICIAL
 if "datos" not in st.session_state:
     st.session_state.datos = cargar_datos_nube()
 
@@ -162,39 +159,35 @@ with tab1:
 
     reg_existente = datos["registros"].get(persona_sel, {}).get(mes_sel, {}).get(semana_sel, {})
 
-    st.subheader(f"Horarios - {datos['personas'].get(persona_sel, '')}")
-    st.caption("Escribe las horas como: '10am a 1pm' o el número de horas trabajadas directamente.")
+    # FORMULARIO DE CAPTURA PARA EVITAR PÉRDIDA DE DATOS
+    with st.form(key=f"form_{persona_sel}_{mes_sel}_{semana_sel}"):
+        st.subheader(f"Horarios - {datos['personas'].get(persona_sel, '')}")
+        st.caption("Escribe las horas como: '10am a 1pm' o el número de horas trabajadas directamente.")
 
-    cols = st.columns(7)
-    horarios_captura = {}
-    for i, d in enumerate(dias):
-        val_prev = reg_existente.get("horario", {}).get(d, "")
-        key_horario = f"h_{persona_sel}_{mes_sel}_{semana_sel}_{d}"
-        horarios_captura[d] = cols[i].text_input(d, value=val_prev, key=key_horario)
+        cols = st.columns(7)
+        horarios_captura = {}
+        for i, d in enumerate(dias):
+            val_prev = reg_existente.get("horario", {}).get(d, "")
+            horarios_captura[d] = cols[i].text_input(d, value=val_prev)
 
-    horas_extra = {}
-    horas_totales = {}
-    for d in dias:
-        ht = obtener_horas_trabajadas(horarios_captura[d])
-        ext = max(0.0, ht - 12.0)
-        horas_extra[d] = ext
-        horas_totales[d] = ht
+        st.subheader("Captura de Abonos / Pagos")
+        abonos_captura = {}
+        for forma in FORMAS_PAGO:
+            st.write(f"**{forma}**")
+            cols_pago = st.columns(7)
+            abonos_captura[forma] = {}
+            for i, d in enumerate(dias):
+                val_p = reg_existente.get("abonos", {}).get(d, {}).get(forma, "")
+                abonos_captura[forma][d] = cols_pago[i].text_input(f"{forma} {d}", value=val_p, label_visibility="collapsed")
 
+        # Botón del formulario
+        submit_button = st.form_submit_button(label="☁️ Guardar Registro en la Nube", use_container_width=True)
+
+    # Procesar datos solo al hacer clic en el botón de enviar
+    horas_extra = {d: max(0.0, obtener_horas_trabajadas(horarios_captura[d]) - 12.0) for d in dias}
+    horas_totales = {d: obtener_horas_trabajadas(horarios_captura[d]) for d in dias}
     tot_ext = sum(horas_extra.values())
     tot_hrs = sum(horas_totales.values())
-
-    st.write(f"**Total Horas Extra:** {tot_ext:.1f} hrs | **Total Horas Trabajadas:** {tot_hrs:.1f} hrs")
-
-    st.subheader("Captura de Abonos / Pagos")
-    abonos_captura = {}
-    for forma in FORMAS_PAGO:
-        st.write(f"**{forma}**")
-        cols_pago = st.columns(7)
-        abonos_captura[forma] = {}
-        for i, d in enumerate(dias):
-            val_p = reg_existente.get("abonos", {}).get(d, {}).get(forma, "")
-            key_abono = f"p_{persona_sel}_{mes_sel}_{semana_sel}_{forma}_{d}"
-            abonos_captura[forma][d] = cols_pago[i].text_input(f"{forma} {d}", value=val_p, label_visibility="collapsed", key=key_abono)
 
     total_abonos = sum(texto_a_numero(abonos_captura[f][d]) for f in FORMAS_PAGO for d in dias)
     info_mod = datos["modelos"].get(modelo_sel, {"base": 0, "extra": 0})
@@ -206,7 +199,7 @@ with tab1:
     m2.metric("Total Extras ($)", dinero(dinero_extra))
     m3.metric("Saldo Pendiente a Pagar", dinero(total_a_pagar))
 
-    if st.button("☁️ Guardar Registro en la Nube", use_container_width=True):
+    if submit_button:
         info_sem = mapa_semanas.get(semana_sel, {})
         reg = {
             "horario": horarios_captura,
@@ -220,11 +213,7 @@ with tab1:
         }
         datos["registros"].setdefault(persona_sel, {}).setdefault(mes_sel, {})[semana_sel] = reg
         if guardar_datos_nube():
-            st.success("¡Registro guardado exitosamente en la nube!")
-            # Borramos la memoria local de la sesión para obligar a leer la nube limpia
-            for key in list(st.session_state.keys()):
-                if key != "datos":
-                    del st.session_state[key]
+            st.success("¡Registro guardado exitosamente en Firebase!")
             st.rerun()
 
 with tab2:
