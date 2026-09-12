@@ -7,9 +7,10 @@ import datetime
 st.set_page_config(page_title="Control de Horarios Uber", layout="wide")
 
 # ==============================================================================
-# ⚠️ PEGA AQUÍ LA URL DE TU BASE DE DATOS DE FIREBASE
+# ⚠️ TU URL DE FIREBASE CONFIGURADA
 # ==============================================================================
-FIREBASE_URL = "https://console.firebase.google.com/project/servicio-uber/database/servicio-uber-default-rtdb/data/~2F"
+FIREBASE_URL = "https://servicio-uber-default-rtdb.firebaseio.com"
+
 if FIREBASE_URL.endswith("/"):
     FIREBASE_URL = FIREBASE_URL[:-1]
 
@@ -106,8 +107,6 @@ def dinero(v):
 # --- FUNCIONES DE NUBE (FIREBASE) ---
 def cargar_datos_nube():
     base = {"personas": dict(PERSONAS_DEFAULT), "modelos": dict(MODELOS_DEFAULT), "registros": {}}
-    if "PEGA_AQUI" in FIREBASE_URL:
-        return base
     try:
         res = requests.get(f"{FIREBASE_URL}/datos.json")
         if res.status_code == 200 and res.json() is not None:
@@ -120,15 +119,19 @@ def cargar_datos_nube():
     return base
 
 def guardar_datos_nube():
-    if "PEGA_AQUI" in FIREBASE_URL:
-        st.warning("Falta configurar la URL de Firebase en el código.")
-        return
     try:
-        requests.put(f"{FIREBASE_URL}/datos.json", json=st.session_state.datos)
+        res = requests.put(f"{FIREBASE_URL}/datos.json", json=st.session_state.datos)
+        if res.status_code == 200:
+            return True
+        else:
+            st.error(f"Error al guardar en Firebase: Código {res.status_code}")
+            return False
     except Exception as e:
-        st.error(f"Error al guardar en la nube: {e}")
+        st.error(f"Error de conexión al guardar: {e}")
+        return False
 
-if "datos" not in st.session_state:
+# Carga inicial o recarga de datos
+if "datos" not in st.session_state or st.sidebar.button("🔄 Recargar datos de la Nube"):
     st.session_state.datos = cargar_datos_nube()
 
 datos = st.session_state.datos
@@ -210,8 +213,9 @@ with tab1:
             "total_a_pagar": total_a_pagar,
         }
         datos["registros"].setdefault(persona_sel, {}).setdefault(mes_sel, {})[semana_sel] = reg
-        guardar_datos_nube()
-        st.success("¡Registro guardado en la nube en tiempo real!")
+        if guardar_datos_nube():
+            st.success("¡Registro guardado exitosamente en la nube!")
+            st.rerun()
 
 with tab2:
     st.subheader("Resumen de Depósitos")
@@ -249,9 +253,9 @@ with tab3:
     if st.button("Agregar Conductor"):
         if c_apodo and c_nombre:
             datos["personas"][c_apodo.lower()] = c_nombre
-            guardar_datos_nube()
-            st.success(f"Conductor {c_nombre} agregado a la nube.")
-            st.rerun()
+            if guardar_datos_nube():
+                st.success(f"Conductor {c_nombre} agregado a la nube.")
+                st.rerun()
 
     st.markdown("---")
     st.subheader("Agregar Nuevo Modelo de Carro")
@@ -261,6 +265,6 @@ with tab3:
     if st.button("Agregar Modelo"):
         if m_nombre:
             datos["modelos"][m_nombre] = {"base": m_base, "extra": m_extra}
-            guardar_datos_nube()
-            st.success(f"Modelo {m_nombre} agregado a la nube.")
-            st.rerun()
+            if guardar_datos_nube():
+                st.success(f"Modelo {m_nombre} agregado a la nube.")
+                st.rerun()
