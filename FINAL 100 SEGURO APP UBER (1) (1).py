@@ -127,7 +127,7 @@ datos = st.session_state.datos
 # --- INTERFAZ STREAMLIT ---
 st.title("🚗 Control de Horarios y Pagos Uber")
 
-tab1, tab2, tab3 = st.tabs(["📋 Captura de Horarios", "💰 Depósitos y Deudas", "⚙️ Gestión (Choferes/Autos)"])
+tab1, tab2, tab3, tab4 = st.tabs(["📋 Captura de Horarios", "💰 Depósitos y Deudas", "⚙️ Gestión (Choferes/Autos)", "💾 Respaldar / Cargar Datos"])
 
 with tab1:
     c1, c2, c3 = st.columns(3)
@@ -155,7 +155,6 @@ with tab1:
         val_prev = reg_existente.get("horario", {}).get(d, "")
         horarios_captura[d] = cols[i].text_input(d, value=val_prev, key=f"h_{d}")
 
-    # Cálculos de horas
     horas_extra = {}
     horas_totales = {}
     for d in dias:
@@ -179,7 +178,6 @@ with tab1:
             val_p = reg_existente.get("abonos", {}).get(d, {}).get(forma, "")
             abonos_captura[forma][d] = cols_pago[i].text_input(f"{forma} {d}", value=val_p, label_visibility="collapsed", key=f"p_{forma}_{d}")
 
-    # Totales monetarios
     total_abonos = sum(texto_a_numero(abonos_captura[f][d]) for f in FORMAS_PAGO for d in dias)
     info_mod = datos["modelos"].get(modelo_sel, {"base": 0, "extra": 0})
     dinero_extra = tot_ext * info_mod["extra"]
@@ -243,7 +241,7 @@ with tab3:
         if c_apodo and c_nombre:
             datos["personas"][c_apodo.lower()] = c_nombre
             guardar_datos()
-            st.success(f"Conductor {c_nombre} agregado. Recarga la página.")
+            st.success(f"Conductor {c_nombre} agregado.")
             st.rerun()
 
     st.markdown("---")
@@ -257,3 +255,29 @@ with tab3:
             guardar_datos()
             st.success(f"Modelo {m_nombre} agregado.")
             st.rerun()
+
+with tab4:
+    st.subheader("💾 Guardar o Cargar Copia de Seguridad")
+    st.write("Debido a que el servidor de la nube se reinicia, descarga aquí tu archivo de respaldo para no perder información.")
+    
+    json_str = json.dumps(datos, ensure_ascii=False, indent=2)
+    st.download_button(
+        label="📥 Descargar copia de datos (datos.json)",
+        data=json_str,
+        file_name="datos.json",
+        mime="application/json",
+        use_container_width=True
+    )
+
+    st.markdown("---")
+    st.subheader("📤 Cargar Copia de Seguridad")
+    archivo_subido = st.file_uploader("Selecciona tu archivo datos.json descargado previamente", type=["json"])
+    if archivo_subido is not None:
+        try:
+            nuevos_datos = json.load(archivo_subido)
+            st.session_state.datos = nuevos_datos
+            guardar_datos()
+            st.success("¡Datos cargados y actualizados correctamente!")
+            st.rerun()
+        except Exception as e:
+            st.error("Error al leer el archivo JSON.")
