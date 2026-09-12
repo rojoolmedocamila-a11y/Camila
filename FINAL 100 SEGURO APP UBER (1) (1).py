@@ -6,9 +6,6 @@ import datetime
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Control de Horarios Uber", layout="wide")
 
-# ==============================================================================
-# ⚠️ TU URL DE FIREBASE CONFIGURADA
-# ==============================================================================
 FIREBASE_URL = "https://servicio-uber-default-rtdb.firebaseio.com"
 
 if FIREBASE_URL.endswith("/"):
@@ -130,7 +127,7 @@ def guardar_datos_nube():
         st.error(f"Error de conexión al guardar: {e}")
         return False
 
-# Carga inicial o recarga de datos
+# Cargar datos siempre al refrescar si no existen en memoria o si se presiona el botón
 if "datos" not in st.session_state or st.sidebar.button("🔄 Recargar datos de la Nube"):
     st.session_state.datos = cargar_datos_nube()
 
@@ -165,7 +162,9 @@ with tab1:
     horarios_captura = {}
     for i, d in enumerate(dias):
         val_prev = reg_existente.get("horario", {}).get(d, "")
-        horarios_captura[d] = cols[i].text_input(d, value=val_prev, key=f"h_{d}")
+        # Se agrega la persona, mes y semana a la 'key' para forzar la actualización del cuadro de texto al cambiar
+        key_horario = f"h_{persona_sel}_{mes_sel}_{semana_sel}_{d}"
+        horarios_captura[d] = cols[i].text_input(d, value=val_prev, key=key_horario)
 
     horas_extra = {}
     horas_totales = {}
@@ -188,7 +187,8 @@ with tab1:
         abonos_captura[forma] = {}
         for i, d in enumerate(dias):
             val_p = reg_existente.get("abonos", {}).get(d, {}).get(forma, "")
-            abonos_captura[forma][d] = cols_pago[i].text_input(f"{forma} {d}", value=val_p, label_visibility="collapsed", key=f"p_{forma}_{d}")
+            key_abono = f"p_{persona_sel}_{mes_sel}_{semana_sel}_{forma}_{d}"
+            abonos_captura[forma][d] = cols_pago[i].text_input(f"{forma} {d}", value=val_p, label_visibility="collapsed", key=key_abono)
 
     total_abonos = sum(texto_a_numero(abonos_captura[f][d]) for f in FORMAS_PAGO for d in dias)
     info_mod = datos["modelos"].get(modelo_sel, {"base": 0, "extra": 0})
